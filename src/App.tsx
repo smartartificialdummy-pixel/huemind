@@ -302,16 +302,18 @@ export default function App() {
                   <h2 className="text-xl font-bold">Pick the original color</h2>
                   <p className="text-slate-400 text-sm">Which one matches the target OKLab?</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-0 rounded-2xl overflow-hidden border-4 border-white shadow-lg">
                   {options.map((color, idx) => (
                     <motion.button
                       key={idx}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={() => handleSelect(color)}
-                      className="aspect-square rounded-2xl shadow-md border-4 border-white transition-shadow hover:shadow-lg"
+                      className="aspect-square transition-colors relative group"
                       style={{ backgroundColor: color.hex }}
-                    />
+                    >
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
+                    </motion.button>
                   ))}
                 </div>
               </motion.div>
@@ -356,7 +358,7 @@ export default function App() {
                 {selectedColor.hex !== targetColor.hex && (
                   <div className="space-y-3">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">The Options Provided Were:</p>
-                    <div className="grid grid-cols-4 gap-0 rounded-xl overflow-hidden border border-slate-100">
+                    <div className="grid grid-cols-2 gap-0 rounded-xl overflow-hidden border border-slate-100 max-w-[160px] mx-auto">
                       {options.map((color, idx) => (
                         <div 
                           key={idx}
@@ -469,7 +471,7 @@ export default function App() {
 
                 <div className="space-y-3">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Final Round Options:</p>
-                  <div className="grid grid-cols-4 gap-0 rounded-xl overflow-hidden border border-slate-100">
+                  <div className="grid grid-cols-2 gap-0 rounded-xl overflow-hidden border border-slate-100 max-w-[120px] mx-auto">
                     {options.map((color, idx) => (
                       <div 
                         key={idx}
