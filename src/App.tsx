@@ -14,13 +14,42 @@ interface Color {
   r: number;
   g: number;
   b: number;
+  oklab: { L: string; a: string; b: string };
 }
+
+const rgbToOklab = (r: number, g: number, b: number) => {
+  let lr = r / 255;
+  let lg = g / 255;
+  let lb = b / 255;
+
+  lr = lr > 0.04045 ? Math.pow((lr + 0.055) / 1.055, 2.4) : lr / 12.92;
+  lg = lg > 0.04045 ? Math.pow((lg + 0.055) / 1.055, 2.4) : lg / 12.92;
+  lb = lb > 0.04045 ? Math.pow((lb + 0.055) / 1.055, 2.4) : lb / 12.92;
+
+  const l = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb;
+  const m = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb;
+  const s = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb;
+
+  const l_ = Math.cbrt(l);
+  const m_ = Math.cbrt(m);
+  const s_ = Math.cbrt(s);
+
+  const L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720401 * s_;
+  const a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
+  const b_ = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+
+  return { 
+    L: L.toFixed(3), 
+    a: a.toFixed(3), 
+    b: b_.toFixed(3) 
+  };
+};
 
 const hexToRgb = (hex: string): Color => {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  return { hex, r, g, b };
+  return { hex, r, g, b, oklab: rgbToOklab(r, g, b) };
 };
 
 const rgbToHex = (r: number, g: number, b: number): string => {
@@ -32,15 +61,21 @@ const generateRandomColor = (): Color => {
   const r = Math.floor(Math.random() * 256);
   const g = Math.floor(Math.random() * 256);
   const b = Math.floor(Math.random() * 256);
-  return { hex: rgbToHex(r, g, b), r, g, b };
+  return { hex: rgbToHex(r, g, b), r, g, b, oklab: rgbToOklab(r, g, b) };
 };
 
 const generateSimilarColor = (base: Color, difficulty: number): Color => {
   // Higher difficulty = smaller offset
   // Difficulty starts at 1 and increases.
-  // Initial offset range: 60
-  // As difficulty increases, range decreases.
-  const range = Math.max(5, 80 / Math.pow(difficulty, 0.6));
+  // Greater difficulty gap in first 5 levels
+  let range;
+  if (difficulty <= 5) {
+    // Start very easy (120) and drop quickly to 40 by level 5
+    range = 120 - (difficulty - 1) * 20;
+  } else {
+    // Continue with a slower decay
+    range = Math.max(5, 40 / Math.pow(difficulty - 4, 0.5));
+  }
   
   const getOffset = () => (Math.random() - 0.5) * 2 * range;
   
@@ -48,13 +83,17 @@ const generateSimilarColor = (base: Color, difficulty: number): Color => {
   let g = base.g + getOffset();
   let b = base.b + getOffset();
   
+  // Clamp values
+  r = Math.max(0, Math.min(255, r));
+  g = Math.max(0, Math.min(255, g));
+  b = Math.max(0, Math.min(255, b));
+  
   // Ensure it's actually different enough to not be identical but close
-  // If it's too close by chance, push it a bit
   if (Math.abs(r - base.r) + Math.abs(g - base.g) + Math.abs(b - base.b) < 5) {
-    r += range / 2;
+    r = (r + 10) % 255;
   }
 
-  return { hex: rgbToHex(r, g, b), r, g, b };
+  return { hex: rgbToHex(r, g, b), r, g, b, oklab: rgbToOklab(r, g, b) };
 };
 
 const calculateAccuracy = (c1: Color, c2: Color): number => {
@@ -235,8 +274,11 @@ export default function App() {
                     className="w-full aspect-square max-w-[200px] mx-auto rounded-3xl shadow-inner border-4 border-white"
                     style={{ backgroundColor: targetColor.hex }}
                   />
-                  <div className="font-mono text-3xl font-bold text-slate-800 tracking-wider">
-                    {targetColor.hex}
+                  <div className="font-mono text-xl font-bold text-slate-800 tracking-tight space-y-1">
+                    <div className="text-xs text-slate-400 uppercase">OKLab</div>
+                    <div>L: {targetColor.oklab.L}</div>
+                    <div>a: {targetColor.oklab.a}</div>
+                    <div>b: {targetColor.oklab.b}</div>
                   </div>
                 </div>
                 <button
@@ -258,7 +300,7 @@ export default function App() {
               >
                 <div className="text-center space-y-1">
                   <h2 className="text-xl font-bold">Pick the original color</h2>
-                  <p className="text-slate-400 text-sm">Which one matches {targetColor.hex}?</p>
+                  <p className="text-slate-400 text-sm">Which one matches the target OKLab?</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {options.map((color, idx) => (
@@ -287,7 +329,9 @@ export default function App() {
                   <div className="space-y-2">
                     <p className="text-[10px] font-bold uppercase tracking-tighter text-slate-400">Target</p>
                     <div className="w-20 h-20 rounded-xl border-2 border-slate-100" style={{ backgroundColor: targetColor.hex }} />
-                    <p className="font-mono text-xs font-bold">{targetColor.hex}</p>
+                    <div className="font-mono text-[8px] leading-tight">
+                      L:{targetColor.oklab.L}<br/>a:{targetColor.oklab.a}<br/>b:{targetColor.oklab.b}
+                    </div>
                   </div>
                   <div className="flex flex-col items-center">
                     {selectedColor.hex === targetColor.hex ? (
@@ -303,33 +347,29 @@ export default function App() {
                   <div className="space-y-2">
                     <p className="text-[10px] font-bold uppercase tracking-tighter text-slate-400">Selected</p>
                     <div className="w-20 h-20 rounded-xl border-2 border-slate-100" style={{ backgroundColor: selectedColor.hex }} />
-                    <p className="font-mono text-xs font-bold">{selectedColor.hex}</p>
+                    <div className="font-mono text-[8px] leading-tight">
+                      L:{selectedColor.oklab.L}<br/>a:{selectedColor.oklab.a}<br/>b:{selectedColor.oklab.b}
+                    </div>
                   </div>
                 </div>
 
                 {selectedColor.hex !== targetColor.hex && (
                   <div className="space-y-3">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">The Options Provided Were:</p>
-                    <div className="grid grid-cols-4 gap-2">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">The Options Provided Were:</p>
+                    <div className="grid grid-cols-4 gap-0 rounded-xl overflow-hidden border border-slate-100">
                       {options.map((color, idx) => (
                         <div 
                           key={idx}
-                          className={`aspect-square rounded-lg border-2 relative ${
-                            color.hex === targetColor.hex 
-                              ? 'border-emerald-500 shadow-sm shadow-emerald-100' 
-                              : color.hex === selectedColor.hex 
-                                ? 'border-rose-500' 
-                                : 'border-transparent'
-                          }`}
+                          className="aspect-square relative transition-all"
                           style={{ backgroundColor: color.hex }}
                         >
                           {color.hex === targetColor.hex && (
-                            <div className="absolute -top-1 -right-1 bg-emerald-500 rounded-full p-0.5">
+                            <div className="absolute top-1 left-1 bg-emerald-500 rounded-full p-0.5 border border-white shadow-sm z-10">
                               <CheckCircle2 className="w-2 h-2 text-white" />
                             </div>
                           )}
                           {color.hex === selectedColor.hex && color.hex !== targetColor.hex && (
-                            <div className="absolute -top-1 -right-1 bg-rose-500 rounded-full p-0.5">
+                            <div className="absolute top-1 left-1 bg-rose-500 rounded-full p-0.5 border border-white shadow-sm z-10">
                               <XCircle className="w-2 h-2 text-white" />
                             </div>
                           )}
@@ -394,23 +434,30 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-slate-50 rounded-2xl p-6 space-y-4">
-                  <div className="flex justify-center gap-6 items-center border-b border-slate-200 pb-4 mb-2">
+                <div className="bg-slate-50 rounded-2xl p-6 space-y-6">
+                  <div className="flex justify-center gap-6 items-center border-b border-slate-200 pb-6 mb-2">
                     <div className="space-y-1">
                       <p className="text-[8px] font-bold uppercase tracking-tighter text-slate-400">Target</p>
-                      <div className="w-12 h-12 rounded-lg border border-slate-200" style={{ backgroundColor: targetColor.hex }} />
-                      <p className="font-mono text-[8px]">{targetColor.hex}</p>
+                      <div className="w-14 h-14 rounded-xl border-2 border-white shadow-sm" style={{ backgroundColor: targetColor.hex }} />
+                      <div className="font-mono text-[6px] leading-tight text-slate-500">
+                        L:{targetColor.oklab.L}<br/>a:{targetColor.oklab.a}<br/>b:{targetColor.oklab.b}
+                      </div>
                     </div>
                     <div className="flex flex-col items-center">
-                      <div className="text-lg font-black text-slate-900">
+                      <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center border-2 border-rose-100 mb-1">
+                        <XCircle className="w-6 h-6 text-rose-500" />
+                      </div>
+                      <div className="text-xl font-black text-slate-900">
                         {calculateAccuracy(targetColor, selectedColor)}%
                       </div>
-                      <p className="text-[8px] font-bold text-slate-400 uppercase">Final Accuracy</p>
+                      <p className="text-[8px] font-bold text-slate-400 uppercase">Accuracy</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[8px] font-bold uppercase tracking-tighter text-slate-400">Selected</p>
-                      <div className="w-12 h-12 rounded-lg border border-slate-200" style={{ backgroundColor: selectedColor.hex }} />
-                      <p className="font-mono text-[8px]">{selectedColor.hex}</p>
+                      <div className="w-14 h-14 rounded-xl border-2 border-white shadow-sm" style={{ backgroundColor: selectedColor.hex }} />
+                      <div className="font-mono text-[6px] leading-tight text-slate-500">
+                        L:{selectedColor.oklab.L}<br/>a:{selectedColor.oklab.a}<br/>b:{selectedColor.oklab.b}
+                      </div>
                     </div>
                   </div>
 
@@ -421,27 +468,21 @@ export default function App() {
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Final Round Options:</p>
-                  <div className="grid grid-cols-4 gap-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Final Round Options:</p>
+                  <div className="grid grid-cols-4 gap-0 rounded-xl overflow-hidden border border-slate-100">
                     {options.map((color, idx) => (
                       <div 
                         key={idx}
-                        className={`aspect-square rounded-lg border-2 relative ${
-                          color.hex === targetColor.hex 
-                            ? 'border-emerald-500 shadow-sm shadow-emerald-100' 
-                            : color.hex === selectedColor.hex 
-                              ? 'border-rose-500' 
-                              : 'border-transparent'
-                        }`}
+                        className="aspect-square relative transition-all"
                         style={{ backgroundColor: color.hex }}
                       >
                         {color.hex === targetColor.hex && (
-                          <div className="absolute -top-1 -right-1 bg-emerald-500 rounded-full p-0.5">
+                          <div className="absolute top-1 left-1 bg-emerald-500 rounded-full p-0.5 border border-white shadow-sm z-10">
                             <CheckCircle2 className="w-2 h-2 text-white" />
                           </div>
                         )}
                         {color.hex === selectedColor.hex && color.hex !== targetColor.hex && (
-                          <div className="absolute -top-1 -right-1 bg-rose-500 rounded-full p-0.5">
+                          <div className="absolute top-1 left-1 bg-rose-500 rounded-full p-0.5 border border-white shadow-sm z-10">
                             <XCircle className="w-2 h-2 text-white" />
                           </div>
                         )}
