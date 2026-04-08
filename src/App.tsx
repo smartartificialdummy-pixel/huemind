@@ -16,6 +16,7 @@ interface Color {
   g: number;
   b: number;
   oklab: { L: string; a: string; b: string };
+  family?: string;
 }
 
 const rgbToOklab = (r: number, g: number, b: number) => {
@@ -71,16 +72,21 @@ const COLOR_FAMILIES = [
   { name: 'Teal', range: { r: [0, 80], g: [100, 160], b: [100, 160] } },
 ];
 
-const generateColorForLevel = (level: number): Color => {
-  // Randomize the color family instead of using a fixed sequence
-  const family = COLOR_FAMILIES[Math.floor(Math.random() * COLOR_FAMILIES.length)];
+const generateColorForLevel = (level: number, recentFamilies: string[]): Color => {
+  // Filter out families that have been used recently
+  const availableFamilies = COLOR_FAMILIES.filter(f => !recentFamilies.includes(f.name));
+  
+  // Fallback to all families if somehow we filtered everything (shouldn't happen with 10 families and 4 history)
+  const pool = availableFamilies.length > 0 ? availableFamilies : COLOR_FAMILIES;
+  
+  const family = pool[Math.floor(Math.random() * pool.length)];
   const { r: rRange, g: gRange, b: bRange } = family.range;
   
   const r = Math.floor(Math.random() * (rRange[1] - rRange[0] + 1)) + rRange[0];
   const g = Math.floor(Math.random() * (gRange[1] - gRange[0] + 1)) + gRange[0];
   const b = Math.floor(Math.random() * (bRange[1] - bRange[0] + 1)) + bRange[0];
   
-  return { hex: rgbToHex(r, g, b), r, g, b, oklab: rgbToOklab(r, g, b) };
+  return { hex: rgbToHex(r, g, b), r, g, b, oklab: rgbToOklab(r, g, b), family: family.name };
 };
 
 const generateRandomColor = (): Color => {
@@ -200,6 +206,7 @@ export default function App() {
   const [highScore, setHighScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<{score: number, date: string}[]>([]);
   const [incorrectHistory, setIncorrectHistory] = useState<{level: number, target: Color, selected: Color, options: Color[]}[]>([]);
+  const [recentFamilies, setRecentFamilies] = useState<string[]>([]);
 
   useEffect(() => {
     const saved = localStorage.getItem('chroma_leaderboard');
@@ -220,9 +227,13 @@ export default function App() {
     if (updated.length > 0) setHighScore(updated[0].score);
   }, [leaderboard]);
 
-  const startNewRound = useCallback((level: number) => {
-    const newTarget = generateColorForLevel(level);
+  const startNewRound = useCallback((level: number, currentHistory: string[]) => {
+    const newTarget = generateColorForLevel(level, currentHistory);
     setTargetColor(newTarget);
+    setRecentFamilies(prev => {
+      const updated = [newTarget.family!, ...prev].slice(0, 4);
+      return updated;
+    });
     setPhase('MEMORIZE');
     setSelectedColor(null);
   }, []);
@@ -288,6 +299,7 @@ export default function App() {
     setLives(3);
     setDifficulty(1);
     setIncorrectHistory([]);
+    setRecentFamilies([]);
     setPhase('START');
   };
 
@@ -298,7 +310,8 @@ export default function App() {
     setLives(3);
     setDifficulty(1);
     setIncorrectHistory([]);
-    startNewRound(1);
+    setRecentFamilies([]);
+    startNewRound(1, []);
   };
 
   return (
@@ -514,7 +527,7 @@ export default function App() {
                   
                   <div className="flex gap-3">
                     <button
-                      onClick={lives > 0 || mode === 'INFINITY' ? () => startNewRound(difficulty) : () => setPhase('GAME_OVER')}
+                      onClick={lives > 0 || mode === 'INFINITY' ? () => startNewRound(difficulty, recentFamilies) : () => setPhase('GAME_OVER')}
                       className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 active:scale-[0.98]"
                     >
                       {lives > 0 || mode === 'INFINITY' ? 'Continue' : 'See Result'}
